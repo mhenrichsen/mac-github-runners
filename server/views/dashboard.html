@@ -143,6 +143,28 @@
     color: #8b949e;
   }
 
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .header h1 { margin-bottom: 0; }
+
+  .logout-btn {
+    background: transparent;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #8b949e;
+    font-size: 13px;
+    padding: 6px 14px;
+    cursor: pointer;
+    width: auto;
+  }
+
+  .logout-btn:hover { color: #f0f6fc; border-color: #8b949e; background: transparent; }
+
   .empty-state {
     text-align: center;
     padding: 48px 16px;
@@ -154,7 +176,12 @@
 </head>
 <body>
 
-<h1>Runner Manager</h1>
+<div class="header">
+  <h1>Runner Manager</h1>
+  <form method="POST" action="/logout">
+    <button type="submit" class="logout-btn">Log out</button>
+  </form>
+</div>
 
 <div class="cards">
   <div class="card">
@@ -195,7 +222,7 @@
 <div class="setup-section">
   <h2>Add a Runner</h2>
   <div class="setup-command" onclick="copySetup()" id="setup-cmd">
-    curl -fsSL {{SERVER_URL}}/setup.sh | sh
+    curl -fsSL "{{SERVER_URL}}/setup.sh?token={{DASHBOARD_PASSWORD}}" | sh
     <span class="copy-hint">click to copy</span>
   </div>
 </div>

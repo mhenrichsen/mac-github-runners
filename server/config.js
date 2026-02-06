@@ -12,6 +12,7 @@ function loadConfig() {
     githubOrg: GITHUB_ORG,
     serverUrl: SERVER_URL.replace(/\/+$/, ''),
     sharedSecret: SHARED_SECRET || crypto.randomBytes(32).toString('hex'),
+    dashboardPassword: process.env.DASHBOARD_PASSWORD || null,
     port: parseInt(PORT, 10) || 3000,
   };
 }
