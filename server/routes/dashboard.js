@@ -8,7 +8,8 @@ module.exports = function dashboardRoutes(app, config) {
   app.get('/', (req, res) => {
     const html = template
       .replace(/\{\{SHARED_SECRET\}\}/g, config.sharedSecret)
-      .replace(/\{\{SERVER_URL\}\}/g, config.serverUrl);
+      .replace(/\{\{SERVER_URL\}\}/g, config.serverUrl)
+      .replace(/\{\{DASHBOARD_PASSWORD\}\}/g, config.dashboardPassword || '');
     res.type('text/html').send(html);
   });
 };
