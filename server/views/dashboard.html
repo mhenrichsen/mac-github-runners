@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runner Manager</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 24px;
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .card .value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #f0f6fc;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .card .label {
+    font-size: 13px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .card.online .value { color: #3fb950; }
+  .card.offline .value { color: #f85149; }
+  .card.busy .value { color: #d29922; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #30363d;
+    background: #0d1117;
+  }
+
+  tbody td {
+    padding: 12px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid #21262d;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #1c2128; }
+
+  .status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  .status-dot.online { background: #3fb950; }
+  .status-dot.busy { background: #d29922; }
+  .status-dot.offline { background: #f85149; }
+
+  .runner-name {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+  }
+
+  .setup-section {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .setup-section h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 12px;
+  }
+
+  .setup-command {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+    color: #79c0ff;
+    word-break: break-all;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .setup-command:hover { background: #161b22; }
+
+  .setup-command .copy-hint {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: #8b949e;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 16px;
+    color: #8b949e;
+  }
+
+  .empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Runner Manager</h1>
+
+<div class="cards">
+  <div class="card">
+    <div class="value" id="total">-</div>
+    <div class="label">Total</div>
+  </div>
+  <div class="card online">
+    <div class="value" id="online">-</div>
+    <div class="label">Online</div>
+  </div>
+  <div class="card busy">
+    <div class="value" id="busy-count">-</div>
+    <div class="label">Busy</div>
+  </div>
+  <div class="card offline">
+    <div class="value" id="offline">-</div>
+    <div class="label">Offline</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>Name</th>
+      <th>Hostname</th>
+      <th>Arch</th>
+      <th>OS Version</th>
+      <th>Uptime</th>
+      <th>Last Seen</th>
+    </tr>
+  </thead>
+  <tbody id="runner-tbody">
+    <tr><td colspan="7" class="empty-state"><p>Loading...</p></td></tr>
+  </tbody>
+</table>
+
+<div class="setup-section">
+  <h2>Add a Runner</h2>
+  <div class="setup-command" onclick="copySetup()" id="setup-cmd">
+    curl -fsSL {{SERVER_URL}}/setup.sh | sh
+    <span class="copy-hint">click to copy</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  var SECRET = '{{SHARED_SECRET}}';
+  var POLL_INTERVAL = 10000;
+
+  function relativeTime(dateStr) {
+    var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 0) return 'just now';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function humanUptime(dateStr) {
+    var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 0) return '0s';
+    var d = Math.floor(diff / 86400);
+    var h = Math.floor((diff % 86400) / 3600);
+    var m = Math.floor((diff % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+  }
+
+  function statusClass(runner) {
+    if (!runner.online) return 'offline';
+    if (runner.status === 'busy') return 'busy';
+    return 'online';
+  }
+
+  function statusLabel(runner) {
+    if (!runner.online) return 'Offline';
+    if (runner.status === 'busy') return 'Busy';
+    return 'Online';
+  }
+
+  function renderRunners(data) {
+    var summary = data.summary;
+    document.getElementById('total').textContent = summary.total;
+    document.getElementById('online').textContent = summary.online;
+    document.getElementById('offline').textContent = summary.offline;
+    document.getElementById('busy-count').textContent = summary.busy;
+
+    var tbody = document.getElementById('runner-tbody');
+    var runners = data.runners;
+
+    if (!runners || runners.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>No runners registered yet.</p></td></tr>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < runners.length; i++) {
+      var r = runners[i];
+      var cls = statusClass(r);
+      html += '<tr>'
+        + '<td><span class="status-dot ' + cls + '"></span>' + statusLabel(r) + '</td>'
+        + '<td class="runner-name">' + esc(r.runnerName) + '</td>'
+        + '<td>' + esc(r.hostname || '-') + '</td>'
+        + '<td>' + esc(r.arch || '-') + '</td>'
+        + '<td>' + esc(r.osVersion || '-') + '</td>'
+        + '<td>' + (r.registeredAt ? humanUptime(r.registeredAt) : '-') + '</td>'
+        + '<td>' + (r.lastSeen ? relativeTime(r.lastSeen) : '-') + '</td>'
+        + '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    var el = document.createElement('span');
+    el.textContent = s;
+    return el.innerHTML;
+  }
+
+  function fetchRunners() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/runners');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + SECRET);
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          renderRunners(JSON.parse(xhr.responseText));
+        } catch(e) { /* ignore parse errors */ }
+      }
+    };
+    xhr.send();
+  }
+
+  fetchRunners();
+  setInterval(fetchRunners, POLL_INTERVAL);
+})();
+
+function copySetup() {
+  var el = document.getElementById('setup-cmd');
+  var text = el.textContent.replace('click to copy', '').trim();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+  }
+  var hint = el.querySelector('.copy-hint');
+  if (hint) {
+    hint.textContent = 'copied!';
+    setTimeout(function() { hint.textContent = 'click to copy'; }, 2000);
+  }
+}
+</script>
+</body>
+</html>
